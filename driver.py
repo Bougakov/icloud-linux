@@ -724,6 +724,7 @@ class ICloudSyncEngine:
             self.exclude_paths = []
         self.executor = ThreadPoolExecutor(max_workers=self.warmup_workers, thread_name_prefix="warmup")
         self.stop_event = threading.Event()
+        self.refresh_now_event = threading.Event()
         self.path_locks = {}
         self.path_locks_lock = threading.Lock()
         self.scheduled_downloads = set()
@@ -778,6 +779,7 @@ class ICloudSyncEngine:
                 return
             self.is_shutdown = True
             self.stop_event.set()
+            self.refresh_now_event.set()
             with self.downloads_lock:
                 timers = list(self.download_retry_timers.values())
                 self.download_retry_timers.clear()
@@ -1250,21 +1252,30 @@ class ICloudSyncEngine:
             except Exception as exc:
                 self.logger.error("Upload loop failed: %s", exc)
 
+    def request_remote_refresh(self):
+        self._log_sync("refresh-requested")
+        self.refresh_now_event.set()
+
+    def _run_remote_refresh(self, reason):
+        try:
+            self._log_sync("refresh-start", reason=reason)
+            snapshot = self._crawl_remote_snapshot()
+            self._apply_remote_snapshot(snapshot)
+            self._log_sync("refresh-complete", reason=reason)
+        except Exception as exc:
+            self.logger.error("Remote refresh failed (%s): %s", reason, exc)
+
     def _refresh_loop(self):
         immediate = self.has_persistent_cache()
         if immediate:
-            try:
-                self.logger.info("Starting background remote refresh from persistent cache")
-                snapshot = self._crawl_remote_snapshot()
-                self._apply_remote_snapshot(snapshot)
-            except Exception as exc:
-                self.logger.error("Initial background refresh failed: %s", exc)
-        while not self.stop_event.wait(self.remote_refresh_interval_seconds):
-            try:
-                snapshot = self._crawl_remote_snapshot()
-                self._apply_remote_snapshot(snapshot)
-            except Exception as exc:
-                self.logger.error("Refresh loop failed: %s", exc)
+            self.logger.info("Starting background remote refresh from persistent cache")
+            self._run_remote_refresh("startup")
+        while not self.stop_event.is_set():
+            manual = self.refresh_now_event.wait(self.remote_refresh_interval_seconds)
+            self.refresh_now_event.clear()
+            if self.stop_event.is_set():
+                break
+            self._run_remote_refresh("manual" if manual else "scheduled")
 
     def sync_dirty_entries(self):
         dirty_entries = self.state.list_dirty_entries()
@@ -1544,6 +1555,12 @@ class ICloudFS(Fuse):
     def shutdown(self):
         if self.sync_engine is not None:
             self.sync_engine.shutdown()
+
+    def request_remote_refresh(self):
+        if self.sync_engine is None:
+            self.logger.warning("Remote refresh requested before sync engine was initialized")
+            return
+        self.sync_engine.request_remote_refresh()
 
     def init_icloud(self, username, password, cache_dir, cookie_dir=None, require_session=True):
         """Initialise iCloud API connection.
@@ -2088,7 +2105,7 @@ iCloud Linux: Mount iCloud Drive as a FUSE filesystem
         fs.shutdown()
         raise SystemExit(0)
 
-    # SIGUSR1 — on-demand sync trigger (used by 'icloudctl sync')
+    # SIGUSR1 — on-demand sync/refresh trigger (used by 'icloudctl sync' and 'icloudctl refresh').
     # Queues a one-shot remote crawl in a background thread so the signal
     # handler returns immediately and FUSE keeps serving requests.
     # If sync_engine is not ready yet (still reconciling), queues it to run
@@ -2102,12 +2119,12 @@ iCloud Linux: Mount iCloud Drive as a FUSE filesystem
             if fs.sync_engine is None:
                 logger.warning("SIGUSR1: sync engine not available (unauthenticated or startup failed)")
                 return
-            logger.info("SIGUSR1: starting on-demand sync")
+            logger.info("SIGUSR1: starting on-demand remote metadata crawl")
             try:
                 fs.sync_engine.initial_scan()
-                logger.info("SIGUSR1: on-demand sync complete")
+                logger.info("SIGUSR1: on-demand remote metadata crawl complete")
             except Exception as exc:
-                logger.error("SIGUSR1: on-demand sync failed: %s", exc)
+                logger.error("SIGUSR1: on-demand remote metadata crawl failed: %s", exc)
             finally:
                 # Write completion marker so icloudctl sync can detect done.
                 state_dir = os.path.expanduser("~/.local/state/icloud-linux")
@@ -2120,7 +2137,8 @@ iCloud Linux: Mount iCloud Drive as a FUSE filesystem
 
     signal.signal(signal.SIGTERM, handle_shutdown)
     signal.signal(signal.SIGINT, handle_shutdown)
-    signal.signal(signal.SIGUSR1, handle_sigusr1)
+    if hasattr(signal, "SIGUSR1"):
+        signal.signal(signal.SIGUSR1, handle_sigusr1)
 
     fs.init_icloud(username, password, cache_dir, cookie_dir, require_session=interactive)
     fs.init_local_cache(

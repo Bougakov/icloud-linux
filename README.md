@@ -133,6 +133,7 @@ Use `--debug` to see Apple's reported auth mode and diagnose delivery issues:
 ./icloudctl start
 ./icloudctl stop
 ./icloudctl restart
+./icloudctl refresh
 ./icloudctl status
 ./icloudctl logs
 ./icloudctl doctor
@@ -147,6 +148,7 @@ What they do:
 - `start`: starts the background user service
 - `stop`: stops the service and unmounts the folder
 - `restart`: restarts the service cleanly
+- `refresh`: asks the running service to crawl remote iCloud Drive metadata now
 - `status`: shows whether the service is running
 - `logs`: tails the service logs
 - `doctor`: checks common setup issues

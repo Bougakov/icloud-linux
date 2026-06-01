@@ -1,4 +1,4 @@
 fuse-python
 pyyaml
-pyicloud
+pyicloud>=2.6.4
 jsonpickle

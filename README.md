@@ -70,7 +70,7 @@ sudo dnf install python3-devel fuse fuse-libs fuse-devel gcc make
 ## Fast Setup
 
 ```bash
-git clone https://github.com/mslaughter21228/icloud-linux.git
+git clone https://github.com/IsmaeelAkram/icloud-linux.git
 cd icloud-linux
 ./icloudctl quickstart ~/iCloud
 ```
@@ -189,12 +189,12 @@ sync_paths:
 
 # But skip this large subfolder for now
 exclude_paths:
-  - /Downloads/Michael Priority
+  - /Downloads/Large Archive
 ```
 
 With this config:
 - `/Downloads/*` → file contents downloaded
-- `/Downloads/Michael Priority/*` → stubs only, no download
+- `/Downloads/Large Archive/*` → stubs only, no download
 - Everything else on iCloud → stubs only
 
 When you're ready to hydrate an excluded folder, remove it from `exclude_paths` and restart the service.

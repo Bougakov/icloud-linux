@@ -32,8 +32,7 @@ username.
 
   users.users.<youruser> = {
     isNormalUser = true;
-    # Spawns the systemd user manager at boot even when the user is not
-    # logged in. REQUIRED on a headless server.
+    # Spawns the systemd user manager at boot even when the user is not logged in:
     linger = true;
   };
 

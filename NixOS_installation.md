@@ -263,7 +263,7 @@ pip installed the pre-built wheel instead of compiling from source. Purge the pi
 
 ### `BackendUnavailable: Cannot import 'setuptools.build_meta'`
 
-`setuptools` is not installed in the venv. Run `.venv/bin/pip install setuptools wheel` before retrying. See Step 5a.
+`setuptools` is not installed in the venv. Run `.venv/bin/pip install setuptools wheel` before retrying. Double-check [Step 5a](#5a--install-build-prerequisites-into-the-venv).
 
 ### `Linger=no` — user session not starting at boot
 

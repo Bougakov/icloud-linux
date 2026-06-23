@@ -73,8 +73,6 @@ Apply the configuration:
 sudo nixos-rebuild switch
 ```
 
----
-
 ## Step 2 — Open a Proper User Session
 
 > **Do not use `su - youruser -c "..."`**. It does not go through PAM's `pam_systemd`, so `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` are never set and `systemctl --user` will fail with `Failed to connect to bus`.
@@ -274,5 +272,4 @@ Either `linger = true` was not applied in `configuration.nix`, or the rebuild ha
 ```bash
 sudo loginctl enable-linger <youruser>
 loginctl show-user <youruser> | grep Linger  # Should show: Linger=yes
-```
 ```
